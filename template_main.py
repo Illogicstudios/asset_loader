@@ -7,12 +7,12 @@ if __name__ == '__main__':
         sys.path.append(install_dir)
 
     # TODO import and start right tool
-    import MayaTool
-    from MayaTool import *
+    import AssetLoader
+    from AssetLoader import *
     from utils import *
     from Prefs import *
 
     unload_packages(silent=True, packages=["MayaTool","Prefs"])
-    app = MayaTool()
+    app = AssetLoader()
     app.show()
 
