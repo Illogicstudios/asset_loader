@@ -12,7 +12,7 @@ if __name__ == '__main__':
     from utils import *
     from Prefs import *
 
-    unload_packages(silent=True, packages=["MayaTool","Prefs"])
+    unload_packages(silent=True, packages=["MayaTool","Standin","Prefs"])
     app = AssetLoader()
     app.show()
 
