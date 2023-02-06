@@ -47,6 +47,7 @@ class AssetLoader(QtWidgets.QDialog):
         self.__standins = {}
         self.__sel_standins = []
         self.__variants_and_versions_enabled = False
+        self.__standing_table_refresh_select = True
 
         # UI attributes
         self.__reinit_ui()
@@ -64,6 +65,7 @@ class AssetLoader(QtWidgets.QDialog):
         # Create the layout, linking it to actions and refresh the display
         self.__create_ui()
         self.__refresh_ui()
+        self.__select_all_standin()
         self.__create_callback()
 
     # Create callbacks
@@ -75,18 +77,23 @@ class AssetLoader(QtWidgets.QDialog):
     def closeEvent(self, arg__1: QtGui.QCloseEvent) -> None:
         OpenMaya.MMessage.removeCallback(self.__selection_callback)
 
+    # On scene changed we want to retrieve the standins selected and refresh the ui
     def __scene_selection_changed(self, *args, **kwargs):
         self.__retrieve_standins()
         self.__refresh_standin_table()
         self.__select_all_standin()
+        self.__on_standin_select_changed()
 
-    def __test_trsf_has_standin(self, trsf):
+    # Test if a Transform ndoe has a standin in child shape
+    @staticmethod
+    def __test_trsf_has_standin(trsf):
         if trsf is not None:
             shape = trsf.getShape()
             if shape is not None and objectType(shape, isType="aiStandIn"):
                 return True
         return False
 
+    # Retrieve the standins according to 4 methods of selection
     def __retrieve_standins(self):
         selection = ls(selection=True)
         self.__standins.clear()
@@ -100,33 +107,38 @@ class AssetLoader(QtWidgets.QDialog):
         # Either the proxy, the standin or the transform can be selected
 
         if len(selection) > 0:
+            standins = {}
             for sel in selection:
                 found = False
                 if objectType(sel, isType="aiStandIn"):
                     # Standin selected (1)
                     found = True
-                    self.__standins[sel.name()] = Standin(sel)
+                    standins[sel.name()] = Standin(sel)
                 if not found and objectType(sel, isType="transform"):
-                    if self.__test_trsf_has_standin(sel):
+                    if AssetLoader.__test_trsf_has_standin(sel):
                         # Transform of Standin selected (2)
                         found = True
                         shape = sel.getShape()
-                        self.__standins[shape.name()] = Standin(shape)
+                        standins[shape.name()] = Standin(shape)
 
                     prt = sel.getParent()
                     if not found and prt is not None and objectType(prt, isType="transform"):
-                        if self.__test_trsf_has_standin(prt):
+                        if AssetLoader.__test_trsf_has_standin(prt):
                             # Proxy of Standin selected (3)
                             shape = prt.getShape()
-                            self.__standins[shape.name()] = Standin(shape)
+                            standins[shape.name()] = Standin(shape)
 
                     if not found:
                         for relative in listRelatives(sel):
-                            if objectType(relative, isType="transform") and self.__test_trsf_has_standin(relative):
+                            if objectType(relative, isType="transform") and \
+                                    AssetLoader.__test_trsf_has_standin(relative):
                                 # Group of Transform of Standin selected (4)
                                 shape = relative.getShape()
-                                self.__standins[shape.name()] = Standin(shape)
+                                standins[shape.name()] = Standin(shape)
                                 break
+            for name, standin in standins.items():
+                if standin.parse():
+                    self.__standins[name] = standin
 
     # initialize the ui
     def __reinit_ui(self):
@@ -166,7 +178,7 @@ class AssetLoader(QtWidgets.QDialog):
 
         # ML.1.3 : Table Standins
         self.__ui_standin_table = QTableWidget(0, 4)
-        self.__ui_standin_table.setHorizontalHeaderLabels(["Standin name", "Variant name", "Variant", "Version"])
+        self.__ui_standin_table.setHorizontalHeaderLabels(["Name", "Asset", "Variant", "Version"])
         self.__ui_standin_table.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         self.__ui_standin_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.__ui_standin_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -185,12 +197,14 @@ class AssetLoader(QtWidgets.QDialog):
         self.__ui_variant_list = QListWidget()
         self.__ui_variant_list.setSpacing(2)
         self.__ui_variant_list.setStyleSheet("font-size:14px")
+        self.__ui_variant_list.itemSelectionChanged.connect(self.__refresh_btn)
         right_lists_layout.addWidget(self.__ui_variant_list, 3)
         # ML.1.4.1.2 : Version List
         self.__ui_version_list = QListWidget()
         self.__ui_version_list.setStyleSheet("font-size:16px")
         self.__ui_version_list.setSpacing(4)
         self.__ui_version_list.setFixedWidth(70)
+        self.__ui_version_list.itemSelectionChanged.connect(self.__refresh_btn)
         right_lists_layout.addWidget(self.__ui_version_list)
         # ML.1.4.2 : Button set version
         self.__ui_submit_version_btn = QPushButton("Set version")
@@ -207,16 +221,19 @@ class AssetLoader(QtWidgets.QDialog):
         self.__ui_select_ood_standins_btn.setFixedSize(QSize(height_hint, height_hint))
         btn_left_lyt.addWidget(self.__ui_select_ood_standins_btn)
         # ML.1.5.2 : Update to last
-        self.__ui_update_to_last = QPushButton("Update to last")
-        btn_left_lyt.addWidget(self.__ui_update_to_last)
+        self.__ui_update_to_last_btn = QPushButton("Update to last")
+        self.__ui_update_to_last_btn.clicked.connect(self.__update_to_last)
+        btn_left_lyt.addWidget(self.__ui_update_to_last_btn)
         # ML.1.6 : Buttons right layout
         btn_right_lyt = QHBoxLayout()
         top_grid_layout.addLayout(btn_right_lyt, 2, 1)
         # ML.1.6.1 : To SD Button
         self.__ui_to_sd_btn = QPushButton("to SD")
+        self.__ui_to_sd_btn.clicked.connect(self.__set_to_sd)
         btn_right_lyt.addWidget(self.__ui_to_sd_btn)
         # ML.1.6.2 : To HD Button
         self.__ui_to_hd_btn = QPushButton("to HD")
+        self.__ui_to_hd_btn.clicked.connect(self.__set_to_hd)
         btn_right_lyt.addWidget(self.__ui_to_hd_btn)
 
         # ML.2 : Separator
@@ -233,10 +250,12 @@ class AssetLoader(QtWidgets.QDialog):
         # ML.3.1 : Convert to maya button
         self.__ui_to_maya_btn = QPushButton("Convert to Maya")
         self.__ui_to_maya_btn.setFixedWidth(180)
+        self.__ui_to_maya_btn.clicked.connect(self.__convert_to_maya)
         bottom_btn_lyt.addWidget(self.__ui_to_maya_btn)
         # ML.3.2 : Add transforms
         self.__ui_add_transforms = QPushButton("Add Transforms")
         self.__ui_add_transforms.setFixedWidth(180)
+        self.__ui_add_transforms.setEnabled(False)  # TODO to implement
         bottom_btn_lyt.addWidget(self.__ui_add_transforms)
 
     # Refresh the ui according to the model attribute
@@ -246,11 +265,12 @@ class AssetLoader(QtWidgets.QDialog):
         self.__refresh_variants_list()
         self.__refresh_versions_list()
         self.__refresh_btn()
-        self.__select_all_standin()
 
+    # Select all the standins selected
     def __select_all_standin(self):
         self.__ui_standin_table.selectAll()
 
+    # Check if the selected standins can be treated as one in the variants and version editor
     def __check_variants_versions_enabled(self):
         self.__variants_and_versions_enabled = False
         standin_curr = None
@@ -265,17 +285,20 @@ class AssetLoader(QtWidgets.QDialog):
                 self.__variants_and_versions_enabled = False
                 break
 
+    # Refresh the standins table and their data
     def __refresh_standin_table(self):
-        self._standing_table_refreshing = True
+        standing_table_refresh_select_prev = self.__standing_table_refresh_select
+        self.__standing_table_refresh_select = False
         self.__ui_standin_table.setRowCount(0)
         row_index = 0
+        rows_selected = []
         for standin in self.__standins.values():
             self.__ui_standin_table.insertRow(row_index)
             object_name = standin.get_object_name()
             standin_name = standin.get_standin_name()
 
             if standin in self.__sel_standins:
-                self.__ui_standin_table.selectRow(row_index)
+                rows_selected.append(row_index)
 
             active_variant = standin.get_active_variant()
             active_version = standin.get_active_version()
@@ -289,7 +312,7 @@ class AssetLoader(QtWidgets.QDialog):
 
             object_name_item = QTableWidgetItem(object_name)
             object_name_item.setIcon(QIcon(asset_icon))
-            object_name_item.setData(Qt.UserRole,standin)
+            object_name_item.setData(Qt.UserRole, standin)
             self.__ui_standin_table.setItem(row_index, 0, object_name_item)
 
             standin_name_item = QTableWidgetItem(standin_name)
@@ -305,8 +328,14 @@ class AssetLoader(QtWidgets.QDialog):
             self.__ui_standin_table.setItem(row_index, 3, version_item)
             row_index += 1
 
-        self._standing_table_refreshing = False
+        self.__ui_standin_table.setSelectionMode(QAbstractItemView.MultiSelection)
+        for row_index in rows_selected:
+            self.__ui_standin_table.selectRow(row_index)
+        self.__ui_standin_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
+        self.__standing_table_refresh_select = standing_table_refresh_select_prev
+
+    # Refrsh the list of variants
     def __refresh_variants_list(self):
         self.__ui_variant_list.clear()
         self.__ui_variant_list.setEnabled(self.__variants_and_versions_enabled)
@@ -318,9 +347,10 @@ class AssetLoader(QtWidgets.QDialog):
                 variant_list_widget = QListWidgetItem(variant)
                 self.__ui_variant_list.addItem(variant_list_widget)
                 if active_variant == variant:
-                    self.__ui_variant_list.setItemSelected(variant_list_widget,True)
-                    variant_list_widget.setTextColor(QColor(0,255,255).rgba())
+                    self.__ui_variant_list.setItemSelected(variant_list_widget, True)
+                    variant_list_widget.setTextColor(QColor(0, 255, 255).rgba())
 
+    # Refresh the list of versions
     def __refresh_versions_list(self):
         self.__ui_version_list.clear()
         self.__ui_version_list.setEnabled(self.__variants_and_versions_enabled)
@@ -333,41 +363,98 @@ class AssetLoader(QtWidgets.QDialog):
                 version_list_widget = QListWidgetItem(version[0])
                 self.__ui_version_list.addItem(version_list_widget)
                 if active_version == version[0]:
-                    self.__ui_version_list.setItemSelected(version_list_widget,True)
-                    version_list_widget.setTextColor(QColor(0,255,255).rgba())
+                    self.__ui_version_list.setItemSelected(version_list_widget, True)
+                    version_list_widget.setTextColor(QColor(0, 255, 255).rgba())
 
+    # Refresh the buttons
     def __refresh_btn(self):
-        self.__ui_submit_version_btn.setEnabled(self.__variants_and_versions_enabled)
-        many_sel_standin = len(self.__sel_standins) >0
-        self.__ui_to_sd_btn.setEnabled(many_sel_standin)
-        self.__ui_to_hd_btn.setEnabled(many_sel_standin)
+        many_sel_standin = len(self.__sel_standins) > 0
+        version_items = self.__ui_version_list.selectedItems()
+        variant_items = self.__ui_variant_list.selectedItems()
+        variant = None
+        version = None
+        if len(variant_items) > 0 and len(version_items) > 0:
+            variant = variant_items[0].text()
+            version = version_items[0].text()
 
+        has_sd = False
+        has_hd = False
+        up_to_date = False
+        set_version = False
+        for standin in self.__sel_standins:
+            if not standin.is_up_to_date():
+                up_to_date = True
+            if standin.has_version_in_sd():
+                has_sd = True
+            if standin.has_version_in_hd():
+                has_hd = True
+            if standin.get_active_version() != version or standin.get_active_variant() != variant:
+                set_version = True
+
+        self.__ui_update_to_last_btn.setEnabled(up_to_date)
+        self.__ui_submit_version_btn.setEnabled(self.__variants_and_versions_enabled and set_version)
+
+        self.__ui_to_sd_btn.setEnabled(has_sd)
+        self.__ui_to_hd_btn.setEnabled(has_hd)
+
+        self.__ui_to_maya_btn.setEnabled(many_sel_standin)
+
+    # Retrieve the standins selected when the selection in the standing table changes
     def __on_standin_select_changed(self):
-        if not self._standing_table_refreshing:
+        if self.__standing_table_refresh_select:
             self.__sel_standins.clear()
             for s in self.__ui_standin_table.selectionModel().selectedRows():
-                self.__sel_standins.append(self.__ui_standin_table.item(s.row(),0).data(Qt.UserRole))
+                self.__sel_standins.append(self.__ui_standin_table.item(s.row(), 0).data(Qt.UserRole))
             self.__check_variants_versions_enabled()
             self.__refresh_variants_list()
             self.__refresh_versions_list()
             self.__refresh_btn()
 
+    # Select all the standins that are out of dates
     def __select_all_ood(self):
         self.__ui_standin_table.clearSelection()
         self.__ui_standin_table.setSelectionMode(QAbstractItemView.MultiSelection)
         for i in range(self.__ui_standin_table.rowCount()):
-            standin = self.__ui_standin_table.item(i,0).data(Qt.UserRole)
+            standin = self.__ui_standin_table.item(i, 0).data(Qt.UserRole)
             if not standin.is_up_to_date():
                 self.__ui_standin_table.selectRow(i)
         self.__ui_standin_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
+    # Set the variant and the version selected to the standins selected
     def __set_version(self):
         if self.__variants_and_versions_enabled:
-            for item in self.__ui_version_list.selectedItems():
-                pass
-                #TODO
+            version_items = self.__ui_version_list.selectedItems()
+            variant_items = self.__ui_variant_list.selectedItems()
+            if len(variant_items) > 0 and len(version_items) > 0:
+                version_item = version_items[0]
+                variant_item = variant_items[0]
+                for standin in self.__sel_standins:
+                    standin.set_active_variant_version(variant_item.text(), version_item.text())
+                self.__refresh_ui()
 
-        self.__refresh_standin_table()
-        self.__check_variants_versions_enabled()
-        self.__refresh_variants_list()
-        self.__refresh_versions_list()
+    # Update all the standins selected versions to the last of their variant
+    def __update_to_last(self):
+        for standin in self.__sel_standins:
+            standin.update_to_last()
+        self.__refresh_ui()
+
+    # Set to an SD variant
+    def __set_to_sd(self):
+        for standin in self.__sel_standins:
+            standin.set_to_sd()
+        self.__refresh_ui()
+
+    # Set to an HD variant
+    def __set_to_hd(self):
+        for standin in self.__sel_standins:
+            standin.set_to_hd()
+        self.__refresh_ui()
+
+    # Convert the standins selected to Maya object
+    def __convert_to_maya(self):
+        self.__standing_table_refresh_select = False
+        standins = self.__sel_standins
+        for standin in standins:
+            standin.convert_to_maya()
+        self.__standing_table_refresh_select = True
+        self.__refresh_ui()
