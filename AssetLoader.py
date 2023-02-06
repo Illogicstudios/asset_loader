@@ -18,7 +18,6 @@ from shiboken2 import wrapInstance
 
 import utils
 
-from Prefs import *
 from Standin import *
 
 import maya.OpenMaya as OpenMaya
@@ -34,11 +33,6 @@ class AssetLoader(QtWidgets.QDialog):
 
     def __init__(self, prnt=wrapInstance(int(omui.MQtUtil.mainWindow()), QtWidgets.QWidget)):
         super(AssetLoader, self).__init__(prnt)
-
-        # Common Preferences (common preferences on all tools)
-        self.__common_prefs = Prefs()
-        # Preferences for this tool
-        self.__prefs = Prefs(_FILE_NAME_PREFS)
 
         # Assets
         self.__asset_path = os.path.dirname(__file__) + "/assets"

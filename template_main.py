@@ -10,9 +10,8 @@ if __name__ == '__main__':
     import AssetLoader
     from AssetLoader import *
     from utils import *
-    from Prefs import *
 
-    unload_packages(silent=True, packages=["MayaTool","Standin","Prefs"])
+    unload_packages(silent=True, packages=["MayaTool","Standin"])
     app = AssetLoader()
     app.show()
 
