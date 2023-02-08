@@ -87,52 +87,30 @@ class AssetLoader(QtWidgets.QDialog):
                 return True
         return False
 
-    # Retrieve the standins according to 4 methods of selection
+    # Retrieve the standins
     def __retrieve_standins(self):
         selection = ls(selection=True)
         self.__standins.clear()
-
-        # ______ Group         (4)
-        #   L_____ Transform   (2)
-        #     L______ Standin  (1)
-        #     L______ Proxy    (3)
-        #
-        # We want to select the transform in this situation.
-        # Either the proxy, the standin or the transform can be selected
-
-        if len(selection) > 0:
-            standins = {}
-            for sel in selection:
-                found = False
-                if objectType(sel, isType="aiStandIn"):
-                    # Standin selected (1)
-                    found = True
-                    standins[sel.name()] = Standin(sel)
-                if not found and objectType(sel, isType="transform"):
-                    if AssetLoader.__test_trsf_has_standin(sel):
-                        # Transform of Standin selected (2)
-                        found = True
-                        shape = sel.getShape()
+        standins = {}
+        for sel in selection:
+            if objectType(sel, isType="aiStandIn"):
+                # Standin found
+                standins[sel.name()] = Standin(sel)
+            else:
+                prt = sel.getParent()
+                if prt is not None and objectType(prt, isType="transform"):
+                    shape = prt.getShape()
+                    if shape is not None and objectType(shape, isType="aiStandIn"):
+                        # Proxy of Standin found
                         standins[shape.name()] = Standin(shape)
 
-                    prt = sel.getParent()
-                    if not found and prt is not None and objectType(prt, isType="transform"):
-                        if AssetLoader.__test_trsf_has_standin(prt):
-                            # Proxy of Standin selected (3)
-                            shape = prt.getShape()
-                            standins[shape.name()] = Standin(shape)
+            for rel in listRelatives(sel, allDescendents=True, type="aiStandIn"):
+                standins[rel.name()] = Standin(rel)
 
-                    if not found:
-                        for relative in listRelatives(sel):
-                            if objectType(relative, isType="transform") and \
-                                    AssetLoader.__test_trsf_has_standin(relative):
-                                # Group of Transform of Standin selected (4)
-                                shape = relative.getShape()
-                                standins[shape.name()] = Standin(shape)
-                                break
-            for name, standin in standins.items():
-                if standin.parse():
-                    self.__standins[name] = standin
+        for name, standin in standins.items():
+            if standin.parse():
+                self.__standins[name] = standin
+        self.__standins = dict(sorted(self.__standins.items()))
 
     # initialize the ui
     def __reinit_ui(self):
