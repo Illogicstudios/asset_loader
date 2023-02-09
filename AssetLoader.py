@@ -50,7 +50,13 @@ class AssetLoader(QtWidgets.QDialog):
         self.__standing_table_refresh_select = True
 
         # UI attributes
-        self.__reinit_ui()
+        self.__ui_width = 850
+        self.__ui_height = 500
+        self.__ui_min_width = 600
+        self.__ui_min_height = 300
+        self.__ui_pos = QDesktopWidget().availableGeometry().center() - QPoint(self.__ui_width,self.__ui_height)/2
+
+        self.__retrieve_prefs()
 
         # name the window
         self.setWindowTitle("Asset Loader")
@@ -68,10 +74,23 @@ class AssetLoader(QtWidgets.QDialog):
         self.__select_all_standin()
         self.__create_callback()
 
-    # On resize window event
-    def resizeEvent(self, evnt):
+    # Save preferences
+    def __save_prefs(self):
         size = self.size()
         self.__prefs["window_size"] = {"width": size.width(), "height": size.height()}
+        pos = self.pos()
+        self.__prefs["window_pos"] = {"x": pos.x(), "y": pos.y()}
+
+    # Retrieve preferences
+    def __retrieve_prefs(self):
+        if "window_size" in self.__prefs:
+            size = self.__prefs["window_size"]
+            self.__ui_width = size["width"]
+            self.__ui_height = size["height"]
+
+        if "window_pos" in self.__prefs:
+            pos = self.__prefs["window_pos"]
+            self.__ui_pos = QPoint(pos["x"],pos["y"])
 
     # Create callbacks
     def __create_callback(self):
@@ -81,6 +100,7 @@ class AssetLoader(QtWidgets.QDialog):
     # Remove callbacks
     def hideEvent(self, arg__1: QtGui.QCloseEvent) -> None:
         OpenMaya.MMessage.removeCallback(self.__selection_callback)
+        self.__save_prefs()
 
     # On scene changed we want to retrieve the standins selected and refresh the ui
     def __scene_selection_changed(self, *args, **kwargs):
@@ -123,25 +143,12 @@ class AssetLoader(QtWidgets.QDialog):
                 self.__standins[name] = standin
         self.__standins = dict(sorted(self.__standins.items()))
 
-    # initialize the ui
-    def __reinit_ui(self):
-        if "window_size" in self.__prefs:
-            size = self.__prefs["window_size"]
-            self.__ui_width = size["width"]
-            self.__ui_height = size["height"]
-        else:
-            self.__ui_width = 850
-            self.__ui_height = 500
-        self.__ui_min_width = 600
-        self.__ui_min_height = 300
-
     # Create the ui
     def __create_ui(self):
         # Reinit attributes of the UI
-        self.__reinit_ui()
         self.setMinimumSize(self.__ui_min_width, self.__ui_min_height)
         self.resize(self.__ui_width, self.__ui_height)
-        self.move(QtWidgets.QDesktopWidget().availableGeometry().center() - self.frameGeometry().center())
+        self.move(self.__ui_pos)
 
         # Main Layout
         main_lyt = QVBoxLayout()

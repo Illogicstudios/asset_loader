@@ -11,6 +11,11 @@ if __name__ == '__main__':
     from utils import *
 
     unload_packages(silent=True, packages=["AssetLoader","Standin","Prefs"])
+
+    try:
+        app.close()
+    except:
+        pass
     app = AssetLoader()
     app.show()
 
