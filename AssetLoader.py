@@ -18,6 +18,7 @@ from shiboken2 import wrapInstance
 
 import utils
 
+from Prefs import *
 from Standin import *
 
 import maya.OpenMaya as OpenMaya
@@ -33,6 +34,11 @@ class AssetLoader(QtWidgets.QDialog):
 
     def __init__(self, prnt=wrapInstance(int(omui.MQtUtil.mainWindow()), QtWidgets.QWidget)):
         super(AssetLoader, self).__init__(prnt)
+
+        # Common Preferences (common preferences on all illogic tools)
+        self.__common_prefs = Prefs()
+        # Preferences for this tool
+        self.__prefs = Prefs(_FILE_NAME_PREFS)
 
         # Assets
         self.__asset_path = os.path.dirname(__file__) + "/assets"
@@ -62,13 +68,18 @@ class AssetLoader(QtWidgets.QDialog):
         self.__select_all_standin()
         self.__create_callback()
 
+    # On resize window event
+    def resizeEvent(self, evnt):
+        size = self.size()
+        self.__prefs["window_size"] = {"width": size.width(), "height": size.height()}
+
     # Create callbacks
     def __create_callback(self):
         self.__selection_callback = \
             OpenMaya.MEventMessage.addEventCallback("SelectionChanged", self.__scene_selection_changed)
 
     # Remove callbacks
-    def closeEvent(self, arg__1: QtGui.QCloseEvent) -> None:
+    def hideEvent(self, arg__1: QtGui.QCloseEvent) -> None:
         OpenMaya.MMessage.removeCallback(self.__selection_callback)
 
     # On scene changed we want to retrieve the standins selected and refresh the ui
@@ -114,8 +125,13 @@ class AssetLoader(QtWidgets.QDialog):
 
     # initialize the ui
     def __reinit_ui(self):
-        self.__ui_width = 850
-        self.__ui_height = 500
+        if "window_size" in self.__prefs:
+            size = self.__prefs["window_size"]
+            self.__ui_width = size["width"]
+            self.__ui_height = size["height"]
+        else:
+            self.__ui_width = 850
+            self.__ui_height = 500
         self.__ui_min_width = 600
         self.__ui_min_height = 300
 

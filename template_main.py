@@ -10,7 +10,7 @@ if __name__ == '__main__':
     from AssetLoader import *
     from utils import *
 
-    unload_packages(silent=True, packages=["AssetLoader","Standin"])
+    unload_packages(silent=True, packages=["AssetLoader","Standin","Prefs"])
     app = AssetLoader()
     app.show()
 
