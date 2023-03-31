@@ -141,14 +141,14 @@ class AssetLoader(QtWidgets.QDialog):
                     standins[rel.name()] = Standin(rel)
 
             for name, standin in standins.items():
-                if standin.parse():
+                if standin.is_valid():
                     self.__standins[name] = standin
         else:
             standins = ls(type="aiStandIn")
             for standin in standins:
                 standin_inst = Standin(standin)
-                if standin_inst.parse() and not standin_inst.is_up_to_date():
-                    self.__standins[standin.name()] = Standin(standin)
+                if standin_inst.is_valid() and not standin_inst.is_up_to_date():
+                    self.__standins[standin.name()] = standin_inst
 
         self.__standins = dict(sorted(self.__standins.items()))
 
