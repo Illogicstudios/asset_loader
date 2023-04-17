@@ -203,7 +203,7 @@ class AssetLoader(QtWidgets.QDialog):
         self.__ui_variant_list = QListWidget()
         self.__ui_variant_list.setSpacing(2)
         self.__ui_variant_list.setStyleSheet("font-size:14px")
-        self.__ui_variant_list.itemSelectionChanged.connect(self.__refresh_btn)
+        self.__ui_variant_list.itemSelectionChanged.connect(self.__on_variant_selected_changed)
         right_lists_layout.addWidget(self.__ui_variant_list, 3)
         # ML.1.4.1.2 : Version List
         self.__ui_version_list = QListWidget()
@@ -362,13 +362,18 @@ class AssetLoader(QtWidgets.QDialog):
         self.__ui_version_list.setEnabled(self.__variants_and_versions_enabled)
         if self.__variants_and_versions_enabled:
             standin = self.__sel_standins[0]
-            variants_and_versios = standin.get_versions()
-            versions_active_variant = variants_and_versios[standin.get_active_variant()]
+            variants_and_versions = standin.get_versions()
+            active_variant = standin.get_active_variant()
+            try:
+                selected_variant = self.__ui_variant_list.selectedItems()[0].text()
+            except:
+                return
+            versions_active_variant = variants_and_versions[selected_variant]
             active_version = standin.get_active_version()
             for version in versions_active_variant:
                 version_list_widget = QListWidgetItem(version[0])
                 self.__ui_version_list.addItem(version_list_widget)
-                if active_version == version[0]:
+                if active_variant == selected_variant and active_version == version[0]:
                     self.__ui_version_list.setItemSelected(version_list_widget, True)
                     version_list_widget.setTextColor(QColor(0, 255, 255).rgba())
 
@@ -398,7 +403,8 @@ class AssetLoader(QtWidgets.QDialog):
                 set_version = True
 
         self.__ui_update_to_last_btn.setEnabled(up_to_date)
-        self.__ui_submit_version_btn.setEnabled(self.__variants_and_versions_enabled and set_version)
+        self.__ui_submit_version_btn.setEnabled(self.__variants_and_versions_enabled and set_version and
+                                                len(version_items) > 0)
 
         self.__ui_to_sd_btn.setEnabled(has_sd)
         self.__ui_to_hd_btn.setEnabled(has_hd)
@@ -415,6 +421,10 @@ class AssetLoader(QtWidgets.QDialog):
             self.__refresh_variants_list()
             self.__refresh_versions_list()
             self.__refresh_btn()
+
+    def __on_variant_selected_changed(self):
+        self.__refresh_btn()
+        self.__refresh_versions_list()
 
     # Select all the standins that are out of dates
     def __select_all_ood(self):
