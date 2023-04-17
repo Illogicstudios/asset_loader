@@ -3,7 +3,7 @@ from functools import partial
 
 import sys
 
-from pymel.core import *
+import pymel.core as pm
 import maya.OpenMayaUI as omui
 
 from PySide2 import QtCore
@@ -114,7 +114,7 @@ class AssetLoader(QtWidgets.QDialog):
     def __test_trsf_has_standin(trsf):
         if trsf is not None:
             shape = trsf.getShape()
-            if shape is not None and objectType(shape, isType="aiStandIn"):
+            if shape is not None and pm.objectType(shape, isType="aiStandIn"):
                 return True
         return False
 
@@ -122,29 +122,29 @@ class AssetLoader(QtWidgets.QDialog):
     def __retrieve_standins(self):
         self.__standins.clear()
 
-        selection = ls(selection=True)
+        selection = pm.ls(selection=True)
         if len(selection)>0:
             standins = {}
             for sel in selection:
-                if objectType(sel, isType="aiStandIn"):
+                if pm.objectType(sel, isType="aiStandIn"):
                     # Standin found
                     standins[sel.name()] = Standin(sel)
-                elif objectType(sel, isType="transform"):
+                elif pm.objectType(sel, isType="transform"):
                     prt = sel.getParent()
-                    if prt is not None and objectType(prt, isType="transform"):
+                    if prt is not None and pm.objectType(prt, isType="transform"):
                         shape = prt.getShape()
-                        if shape is not None and objectType(shape, isType="aiStandIn"):
+                        if shape is not None and pm.objectType(shape, isType="aiStandIn"):
                             # Proxy of Standin found
                             standins[shape.name()] = Standin(shape)
 
-                for rel in listRelatives(sel, allDescendents=True, type="aiStandIn"):
+                for rel in pm.listRelatives(sel, allDescendents=True, type="aiStandIn"):
                     standins[rel.name()] = Standin(rel)
 
             for name, standin in standins.items():
                 if standin.is_valid():
                     self.__standins[name] = standin
         else:
-            standins = ls(type="aiStandIn")
+            standins = pm.ls(type="aiStandIn")
             for standin in standins:
                 standin_inst = Standin(standin)
                 if standin_inst.is_valid() and not standin_inst.is_up_to_date():
